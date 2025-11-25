@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chemistry Electrochemical Simulations (Portable)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+      body {
+        background-color: #f8fafc;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      /* Custom scrollbar for better look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react,typescript">
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+        // --- Types (Simulated interface for Babel) ---
+        // In a single file script, interfaces are just for documentation reading 
+        // as Babel strips them out at runtime.
+
+        // --- 1. Galvanic Cell Component ---
+        const WIRE_PATH = "M 100,120 L 100,40 L 300,40 L 500,40 L 500,120";
+        const GALVANIC_SPEED = 0.002;
+
+        const GalvanicCell = () => {
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [time, setTime] = useState(0);
+          const requestRef = useRef(0);
+
+          const animate = useCallback(() => {
+            setTime((prevTime) => prevTime + GALVANIC_SPEED);
+            requestRef.current = requestAnimationFrame(animate);
+          }, []);
+
+          useEffect(() => {
+            if (isPlaying) {
+              requestRef.current = requestAnimationFrame(animate);
+            } else {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            }
+            return () => {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            };
+          }, [isPlaying, animate]);
+
+          const deformation = Math.min(time * 15, 30); 
+
+          const getWirePos = (t) => {
+            const p = t % 1;
+            if (p < 0.14) return { x: 100, y: 120 - (p / 0.14) * 80 };
+            if (p < 0.86) return { x: 100 + ((p - 0.14) / 0.72) * 400, y: 40 };
+            return { x: 500, y: 40 + ((p - 0.86) / 0.14) * 80 };
+          };
+
+          const getBridgePos = (t, reverse) => {
+            let p = t % 1;
+            if (reverse) p = 1 - p;
+            
+            const t1 = 1 - p;
+            let x, y;
+            if (p < 0.5) {
+               const localT = p * 2;
+               const lt1 = 1 - localT;
+               x = lt1*lt1*180 + 2*lt1*localT*180 + localT*localT*300;
+               y = lt1*lt1*200 + 2*lt1*localT*100 + localT*localT*100;
+            } else {
+               const localT = (p - 0.5) * 2;
+               const lt1 = 1 - localT;
+               x = lt1*lt1*300 + 2*lt1*localT*420 + localT*localT*420;
+               y = lt1*lt1*100 + 2*lt1*localT*100 + localT*localT*200;
+            }
+            return { x, y: y + 10 };
+          };
+
+          return (
+            <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 bg-white rounded-xl shadow-lg">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">1. 丹尼爾電池 (Galvanic Cell)</h2>
+              <div className="flex gap-4 mb-4">
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className={`px-8 py-3 rounded-full font-bold text-white transition-colors text-lg shadow-md ${
+                    isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {isPlaying ? '暫停 (Pause)' : '開始 (Start)'}
+                </button>
+                <button
+                  onClick={() => setTime(0)}
+                  className="px-4 py-3 rounded-full font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300 transition-colors"
+                >
+                  重置 (Reset)
+                </button>
+              </div>
+
+              <div className="relative w-full aspect-[5/3] border-2 border-slate-300 rounded-xl overflow-hidden bg-gray-50 shadow-inner">
+                <svg viewBox="0 0 600 400" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="gradZn" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#94a3b8" />
+                      <stop offset="50%" stopColor="#cbd5e1" />
+                      <stop offset="100%" stopColor="#94a3b8" />
+                    </linearGradient>
+                    <linearGradient id="gradCu" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#b45309" />
+                      <stop offset="50%" stopColor="#d97706" />
+                      <stop offset="100%" stopColor="#b45309" />
+                    </linearGradient>
+                    <pattern id="dashedPattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                        <path d="M0,10 L10,0" stroke="#94a3b8" strokeWidth="1" />
+                    </pattern>
+                  </defs>
+
+                  <rect x="50" y="180" width="160" height="200" rx="10" fill="#fff" stroke="#94a3b8" strokeWidth="2" />
+                  <path d="M 55,200 L 205,200 L 205,370 Q 205,375 200,375 L 60,375 Q 55,375 55,370 Z" fill="#f1f5f9" opacity="0.8" />
+                  <text x="130" y="360" textAnchor="middle" fontSize="14" fill="#475569" fontWeight="bold">ZnSO₄(aq)</text>
+
+                  <rect x="390" y="180" width="160" height="200" rx="10" fill="#fff" stroke="#94a3b8" strokeWidth="2" />
+                  <path d="M 395,200 L 545,200 L 545,370 Q 545,375 540,375 L 400,375 Q 395,375 395,370 Z" fill="#3b82f6" opacity="0.4" />
+                  <text x="470" y="360" textAnchor="middle" fontSize="14" fill="#1e40af" fontWeight="bold">CuSO₄(aq)</text>
+
+                  <rect x="80" y="120" width="40" height="200" fill="#e2e8f0" fillOpacity="0.3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5,5"/>
+                  <rect x="80" y="120" width={Math.max(10, 40 - deformation)} height="200" fill="url(#gradZn)" stroke="#475569" />
+                  <text x="65" y="220" textAnchor="end" fill="#334155" fontSize="14" fontWeight="bold" style={{writingMode: "vertical-rl"}}>Zn 負極 (Anode)</text>
+                  
+                  <rect x="480" y="120" width="40" height="200" fill="none" stroke="#78350f" strokeWidth="2" strokeDasharray="5,5" strokeOpacity="0.5"/>
+                  <rect x={480 - deformation} y="120" width={40 + deformation} height="200" fill="url(#gradCu)" stroke="#78350f" />
+                  <text x="535" y="220" textAnchor="start" fill="#451a03" fontSize="14" fontWeight="bold" style={{writingMode: "vertical-rl"}}>Cu 正極 (Cathode)</text>
+
+                  <path d="M 170,200 Q 170,90 300,90 Q 430,90 430,200 L 410,200 Q 410,110 300,110 Q 190,110 190,200 Z" fill="#fffbeb" stroke="#d97706" strokeWidth="2" opacity="0.9" />
+                  <text x="300" y="130" textAnchor="middle" fontSize="14" fill="#92400e" fontWeight="bold">鹽橋 (Salt Bridge)</text>
+
+                  <path d={WIRE_PATH} fill="none" stroke="#333" strokeWidth="4" />
+
+                  <g transform="translate(300, 40)">
+                    <circle r="30" fill="#fef08a" stroke="#333" strokeWidth="3" />
+                    <circle cx="-30" cy="0" r="4" fill="black" />
+                    <circle cx="30" cy="0" r="4" fill="black" />
+                    <text x="0" y="8" textAnchor="middle" fontSize="22" fontWeight="bold">V</text>
+                    <text x="-45" y="-10" fontSize="16" fontWeight="bold" textAnchor="end" fill="#dc2626">-</text>
+                    <text x="45" y="-10" fontSize="16" fontWeight="bold" textAnchor="start" fill="#dc2626">+</text>
+                    <text x="0" y="45" textAnchor="middle" fontSize="14" fill="#000" fontWeight="bold">1.10 V</text>
+                  </g>
+
+                  {[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].map((offset, i) => {
+                     const pos = getWirePos(time + offset);
+                     return (
+                       <g key={`e-${i}`} transform={`translate(${pos.x}, ${pos.y})`}>
+                         <circle r="5" fill="#eab308" stroke="black" strokeWidth="1" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold">e⁻</text>
+                       </g>
+                     );
+                  })}
+
+                  {[0, 0.25, 0.5, 0.75].map((offset, i) => {
+                    const t = (time + offset) % 1;
+                    const currentEdge = 80 + Math.max(10, 40 - deformation);
+                    const x = currentEdge + t * 40; 
+                    const y = 250 + Math.sin(t * 10) * 10;
+                    return (
+                      <g key={`zn-${i}`} transform={`translate(${x}, ${y})`} opacity={1 - t}>
+                        <circle r="8" fill="#cbd5e1" stroke="#475569" />
+                        <text x="0" y="3" textAnchor="middle" fontSize="8">Zn²⁺</text>
+                      </g>
+                    );
+                  })}
+                  
+                  <text x="100" y="340" textAnchor="middle" fontSize="12" fill="#333" className="font-mono font-bold">Zn → Zn²⁺ + 2e⁻</text>
+
+                  {[0, 0.25, 0.5, 0.75].map((offset, i) => {
+                    const t = (time + offset) % 1;
+                    const currentEdge = 480 - deformation;
+                    const startX = 430;
+                    const dist = currentEdge - startX;
+                    const x = startX + t * dist;
+                    const y = 250 + Math.sin(t * 10 + 2) * 10;
+                    const op = t > 0.9 ? 0 : 1;
+                    return (
+                      <g key={`cu-${i}`} transform={`translate(${x}, ${y})`} opacity={op}>
+                        <circle r="8" fill="#3b82f6" stroke="#1e40af" />
+                        <text x="0" y="3" textAnchor="middle" fontSize="8" fill="white">Cu²⁺</text>
+                      </g>
+                    );
+                  })}
+                  
+                  <text x="500" y="340" textAnchor="middle" fontSize="12" fill="#333" className="font-mono font-bold">Cu²⁺ + 2e⁻ → Cu</text>
+
+                  {[0, 0.2, 0.4, 0.6, 0.8].map((offset, i) => {
+                     const rawT = (time * 0.5 + offset) % 1;
+                     const finalPos = getBridgePos(rawT, true); 
+                     return (
+                       <g key={`anion-${i}`} transform={`translate(${finalPos.x}, ${finalPos.y - 5})`}>
+                         <circle r="6" fill="#ef4444" stroke="#7f1d1d" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="10" fill="white">-</text>
+                       </g>
+                     );
+                  })}
+
+                  {[0.1, 0.3, 0.5, 0.7, 0.9].map((offset, i) => {
+                     const rawT = (time * 0.5 + offset) % 1;
+                     const finalPos = getBridgePos(rawT, false);
+                     return (
+                       <g key={`cation-${i}`} transform={`translate(${finalPos.x}, ${finalPos.y + 5})`}>
+                         <circle r="6" fill="#22c55e" stroke="#14532d" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="10" fill="white">+</text>
+                       </g>
+                     );
+                  })}
+
+                </svg>
+                <div className="absolute bottom-2 right-2 bg-white/95 p-3 rounded-lg border border-slate-300 text-xs shadow-md">
+                  <div className="font-bold mb-2 text-slate-800 border-b pb-1">圖例 (Legend)</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 rounded-full bg-yellow-400 border border-black flex items-center justify-center text-[8px]">e</div>
+                    <span>電子 (Electron)</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 rounded-full bg-slate-300 border border-slate-600"></div>
+                    <span>鋅離子 (Zn²⁺)</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-3 h-3 rounded-full bg-blue-500 border border-blue-800"></div>
+                    <span>銅離子 (Cu²⁺)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 2. Electroplating Cell Component ---
+        const WIRE_PATH_LEFT = "M 180,150 L 180,60 L 280,60"; 
+        const WIRE_PATH_RIGHT = "M 320,60 L 420,60 L 420,150";
+
+        const ElectroplatingCell = () => {
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [time, setTime] = useState(0);
+          const requestRef = useRef(0);
+
+          const animate = useCallback(() => {
+            setTime((prevTime) => prevTime + 0.002);
+            requestRef.current = requestAnimationFrame(animate);
+          }, []);
+
+          useEffect(() => {
+            if (isPlaying) {
+              requestRef.current = requestAnimationFrame(animate);
+            } else {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            }
+            return () => {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            };
+          }, [isPlaying, animate]);
+
+          const deformation = Math.min(time * 10, 15); 
+
+          const getWirePosLeft = (t) => {
+            const p = t % 1;
+            if (p < 0.47) { 
+              return { x: 180, y: 150 - (p / 0.47) * 90 };
+            } else { 
+              return { x: 180 + ((p - 0.47) / 0.53) * 100, y: 60 };
+            }
+          };
+
+          const getWirePosRight = (t) => {
+            const p = t % 1;
+            if (p < 0.53) { 
+              return { x: 320 + (p / 0.53) * 100, y: 60 };
+            } else { 
+              return { x: 420, y: 60 + ((p - 0.53) / 0.47) * 90 };
+            }
+          };
+
+          return (
+            <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 bg-white rounded-xl shadow-lg mt-8 border-t-4 border-blue-500">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">3. 電解電鍍 (Electrochemical Plating)</h2>
+              <div className="flex gap-4 mb-4">
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className={`px-8 py-3 rounded-full font-bold text-white transition-colors text-lg shadow-md ${
+                    isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {isPlaying ? '暫停 (Pause)' : '開始 (Start)'}
+                </button>
+                <button onClick={() => setTime(0)} className="px-4 py-3 rounded-full font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300">重置</button>
+              </div>
+
+              <div className="relative w-full aspect-[5/3] border-2 border-slate-300 rounded-xl overflow-hidden bg-gray-50 shadow-inner">
+                <svg viewBox="0 0 600 400" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="gradCuPlate" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#b45309" />
+                      <stop offset="50%" stopColor="#d97706" />
+                      <stop offset="100%" stopColor="#b45309" />
+                    </linearGradient>
+                    <linearGradient id="gradGraphite" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#1f2937" />
+                      <stop offset="50%" stopColor="#374151" />
+                      <stop offset="100%" stopColor="#1f2937" />
+                    </linearGradient>
+                  </defs>
+
+                  <rect x="100" y="200" width="400" height="180" rx="10" fill="#fff" stroke="#94a3b8" strokeWidth="2" />
+                  <path d="M 105,220 L 495,220 L 495,370 Q 495,375 490,375 L 110,375 Q 105,375 105,370 Z" fill="#3b82f6" opacity="0.4" />
+                  <text x="300" y="350" textAnchor="middle" fontSize="16" fill="#1e40af" fontWeight="bold" opacity="0.7">CuSO₄(aq)</text>
+
+                  <g transform="translate(300, 60)">
+                    <line x1="-10" y1="-15" x2="-10" y2="15" stroke="#333" strokeWidth="4" />
+                    <text x="-25" y="-20" fontSize="14" fontWeight="bold" fill="#dc2626">+</text>
+                    <line x1="10" y1="-8" x2="10" y2="8" stroke="#333" strokeWidth="4" />
+                    <text x="20" y="-20" fontSize="14" fontWeight="bold" fill="#333">-</text>
+                    <text x="0" y="35" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#333">DC Power</text>
+                  </g>
+
+                  <path d={WIRE_PATH_LEFT} fill="none" stroke="#333" strokeWidth="3" />
+                  <path d={WIRE_PATH_RIGHT} fill="none" stroke="#333" strokeWidth="3" />
+
+                  <rect x="160" y="150" width="40" height="180" fill="none" stroke="#b45309" strokeWidth="1" strokeDasharray="4,4" opacity="0.5" />
+                  <rect x={160} y="150" width={Math.max(10, 40 - deformation)} height="180" fill="url(#gradCuPlate)" stroke="#78350f" strokeWidth="2" />
+                  <text x="160" y="140" textAnchor="middle" fontWeight="bold" fill="#b45309">銅 (Anode +)</text>
+
+                  <rect x="400" y="150" width="40" height="180" fill="url(#gradGraphite)" stroke="#000" strokeWidth="2" />
+                  <rect x={400 - deformation} y="150" width={40 + deformation * 2} height="180" fill="url(#gradCuPlate)" opacity="0.9" stroke="#78350f" />
+                  <rect x="400" y="150" width="40" height="180" fill="none" stroke="#000" strokeWidth="1" strokeDasharray="2,2" strokeOpacity="0.5" />
+                  <text x="420" y="140" textAnchor="middle" fontWeight="bold" fill="#1f2937">石墨 (Cathode -)</text>
+
+                  {[0, 0.2, 0.4, 0.6, 0.8].map((offset, i) => {
+                     const pos = getWirePosLeft(time + offset);
+                     return (
+                       <g key={`e-left-${i}`} transform={`translate(${pos.x}, ${pos.y})`}>
+                         <circle r="6" fill="#eab308" stroke="black" strokeWidth="1" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold">e⁻</text>
+                       </g>
+                     );
+                  })}
+                  {[0, 0.2, 0.4, 0.6, 0.8].map((offset, i) => {
+                     const pos = getWirePosRight(time + offset);
+                     return (
+                       <g key={`e-right-${i}`} transform={`translate(${pos.x}, ${pos.y})`}>
+                         <circle r="6" fill="#eab308" stroke="black" strokeWidth="1" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="bold">e⁻</text>
+                       </g>
+                     );
+                  })}
+                  {[0, 0.3, 0.6, 0.9].map((offset, i) => {
+                    const t = (time + offset) % 1;
+                    const startX = 160 + Math.max(10, 40 - deformation); 
+                    const x = startX + t * 50;
+                    const y = 250 + Math.sin(t * 10 + i) * 20;
+                    return (
+                      <g key={`ion-ox-${i}`} transform={`translate(${x}, ${y})`} opacity={1 - t}>
+                        <circle r="7" fill="#3b82f6" stroke="#1e40af" />
+                        <text x="0" y="3" textAnchor="middle" fontSize="8" fill="white">Cu²⁺</text>
+                      </g>
+                    );
+                  })}
+                  <text x="180" y="390" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#78350f">Cu → Cu²⁺ + 2e⁻</text>
+                  {[0, 0.25, 0.5, 0.75].map((offset, i) => {
+                     const t = (time + offset) % 1;
+                     const targetX = 400 - deformation;
+                     const startX = targetX - 60;
+                     const x = startX + t * 60;
+                     const y = 200 + (i * 40) + Math.cos(t * 10) * 5; 
+                     const op = t > 0.9 ? 0 : 1;
+                     return (
+                       <g key={`ion-red-${i}`} transform={`translate(${x}, ${y})`} opacity={op}>
+                         <circle r="7" fill="#3b82f6" stroke="#1e40af" />
+                         <text x="0" y="3" textAnchor="middle" fontSize="8" fill="white">Cu²⁺</text>
+                       </g>
+                     );
+                  })}
+                  <text x="420" y="390" textAnchor="middle" fontSize="12" fontWeight="bold" fill="#78350f">Cu²⁺ + 2e⁻ → Cu</text>
+                </svg>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 3. Displacement Reaction Component ---
+        const DisplacementReaction = () => {
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [progress, setProgress] = useState(0); 
+          const requestRef = useRef(0);
+
+          const animate = useCallback(() => {
+            setProgress((prev) => {
+              if (prev >= 1) return 1;
+              return prev + 0.0015;
+            });
+            requestRef.current = requestAnimationFrame(animate);
+          }, []);
+
+          useEffect(() => {
+            if (isPlaying && progress < 1) {
+              requestRef.current = requestAnimationFrame(animate);
+            } else {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            }
+            return () => {
+              if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            };
+          }, [isPlaying, progress, animate]);
+
+          const solutionOpacity = 0.6 * (1 - progress) + 0.05;
+
+          return (
+            <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 bg-white rounded-xl shadow-lg mt-8 border-t-4 border-green-600">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">2. 鋅銅取代反應 (Displacement Reaction)</h2>
+              <div className="flex gap-4 mb-4">
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  disabled={progress >= 1}
+                  className={`px-8 py-3 rounded-full font-bold text-white transition-colors text-lg shadow-md ${
+                     progress >= 1 ? 'bg-gray-400 cursor-not-allowed' : 
+                     isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  {progress >= 1 ? '反應結束 (Finished)' : isPlaying ? '暫停 (Pause)' : '開始 (Start)'}
+                </button>
+                <button onClick={() => setProgress(0)} className="px-4 py-3 rounded-full font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300">重置</button>
+              </div>
+
+              <div className="relative w-full aspect-[5/3] border-2 border-slate-300 rounded-xl overflow-hidden bg-gray-50 shadow-inner">
+                <svg viewBox="0 0 600 400" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="gradZnBar" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#94a3b8" />
+                      <stop offset="50%" stopColor="#cbd5e1" />
+                      <stop offset="100%" stopColor="#94a3b8" />
+                    </linearGradient>
+                    <filter id="roughSurface">
+                      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" />
+                    </filter>
+                  </defs>
+
+                  <rect x="200" y="150" width="200" height="230" rx="10" fill="#fff" stroke="#94a3b8" strokeWidth="2" />
+                  <path d="M 205,170 L 395,170 L 395,370 Q 395,375 390,375 L 210,375 Q 205,375 205,370 Z" fill="#3b82f6" fillOpacity={solutionOpacity}/>
+                  <text x="300" y="360" textAnchor="middle" fontSize="14" fill="#1e3a8a" opacity={solutionOpacity + 0.3} fontWeight="bold">
+                    {progress < 0.8 ? "CuSO₄(aq)" : "ZnSO₄(aq)"}
+                  </text>
+
+                  <rect x="280" y="100" width="40" height="200" fill="url(#gradZnBar)" stroke="#475569" />
+                  
+                  <g opacity={progress}>
+                     <rect x="278" y="170" width="44" height="130" fill="#451a03" rx="2" filter="url(#roughSurface)" opacity="0.9"/>
+                     <circle cx="285" cy="200" r="3" fill="#b45309" />
+                     <circle cx="315" cy="250" r="4" fill="#b45309" />
+                     <circle cx="290" cy="280" r="3" fill="#b45309" />
+                  </g>
+                  <text x="300" y="90" textAnchor="middle" fontWeight="bold" fill="#334155">鋅片 (Zn Plate)</text>
+
+                  {[0, 0.25, 0.5, 0.75].map((offset, i) => {
+                    const loopT = (progress * 50 + offset) % 1; 
+                    if (progress > 0.9) return null; 
+                    const y = 180 + (i * 40);
+                    const x = 280;
+                    return (
+                      <g key={`zn-loss-${i}`} transform={`translate(${x - loopT * 30}, ${y})`} opacity={1 - loopT}>
+                        <circle r="6" fill="#cbd5e1" stroke="#475569" />
+                        <text x="0" y="3" textAnchor="middle" fontSize="8">Zn²⁺</text>
+                      </g>
+                    );
+                  })}
+
+                  {[0.1, 0.35, 0.6, 0.85].map((offset, i) => {
+                    const loopT = (progress * 50 + offset) % 1;
+                    if (progress > 0.9) return null;
+                    const y = 190 + (i * 35);
+                    const startX = 350; 
+                    const endX = 320; 
+                    const currentX = startX - (loopT * (startX - endX));
+                    return (
+                       <g key={`cu-gain-${i}`} transform={`translate(${currentX}, ${y})`} opacity={loopT < 0.9 ? 1 : 0}>
+                         <circle r="6" fill="#3b82f6" stroke="#1e40af" fillOpacity={solutionOpacity + 0.2} />
+                         <text x="0" y="3" textAnchor="middle" fontSize="8" fill="white">Cu²⁺</text>
+                       </g>
+                    );
+                  })}
+
+                  {[0, 0.2, 0.4, 0.6, 0.8].map((offset, i) => {
+                     const loopT = (progress * 50 + offset) % 1;
+                     if (progress > 0.9) return null;
+                     const y = 180 + i * 30;
+                     if (loopT > 0.8 && loopT < 0.95) {
+                         return (
+                            <g key={`e-trans-${i}`} transform={`translate(320, ${y})`}>
+                                <circle r="4" fill="#eab308" stroke="black" />
+                                <text x="5" y="-5" fontSize="10" fontWeight="bold" fill="#eab308">e⁻</text>
+                            </g>
+                         )
+                     }
+                     return null;
+                  })}
+                  <g transform="translate(450, 200)">
+                     <text x="0" y="0" fontWeight="bold" fill="#333" fontSize="14">微觀反應：</text>
+                     <text x="0" y="25" fontSize="12" fill="#555">1. Zn 放出 2e⁻ (氧化)</text>
+                     <text x="0" y="45" fontSize="12" fill="#555">2. e⁻ 停留在鋅片表面</text>
+                     <text x="0" y="65" fontSize="12" fill="#555">3. Cu²⁺ 接觸表面獲得 2e⁻</text>
+                     <text x="0" y="85" fontSize="12" fill="#555">4. 銅析出覆蓋鋅片</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 4. Silver Mirror Reaction Component ---
+        const SUGGESTED_DROPS = { A: 10, B: 10, C: "1.2x A", D: 5 };
+        const SilverMirrorReaction = () => {
+          const [drops, setDrops] = useState({ A: 0, B: 0, C: 0, D: 0 });
+          const [isCapped, setIsCapped] = useState(false);
+          const [shakeSpeed, setShakeSpeed] = useState(0); 
+          const [reactionProgress, setReactionProgress] = useState(0); 
+          const [warning, setWarning] = useState(null);
+          
+          const requestRef = useRef(0);
+          const shakeOffsetRef = useRef(0); 
+
+          const totalDrops = drops.A + drops.B + drops.C + drops.D;
+          const liquidHeightPercent = Math.min((totalDrops / 50) * 100, 90); 
+          const hasReactantsForPpt = drops.A > 0 && drops.B > 0;
+          const neededAmmonia = drops.A * 1.2;
+          const ammoniaRatio = neededAmmonia > 0 ? Math.min(drops.C / neededAmmonia, 1) : 1;
+          const baseTurbidity = hasReactantsForPpt ? Math.min(drops.A, drops.B) / 10 : 0;
+          const turbidity = Math.max(0, baseTurbidity * (1 - ammoniaRatio));
+          const isCloudy = turbidity > 0.1;
+          const isClearComplex = hasReactantsForPpt && !isCloudy;
+          const canReact = isClearComplex && drops.D > 0;
+
+          const animate = useCallback(() => {
+            if (shakeSpeed > 0) {
+              shakeOffsetRef.current = Math.sin(Date.now() / 20) * (shakeSpeed / 20);
+            } else {
+              shakeOffsetRef.current = 0;
+            }
+            if (shakeSpeed > 0 && !isCapped) {
+              setWarning("警告：危險！請先蓋上蓋子再搖晃 (Danger: Cap the vial before shaking!)");
+              setShakeSpeed(0); 
+            } else if (warning && isCapped) {
+              setWarning(null); 
+            }
+            if (canReact && isCapped && shakeSpeed > 0 && reactionProgress < 100) {
+              const rate = (0.05 * shakeSpeed) / (totalDrops + 5); 
+              setReactionProgress(prev => Math.min(prev + rate, 100));
+            }
+            requestRef.current = requestAnimationFrame(animate);
+          }, [shakeSpeed, isCapped, canReact, totalDrops, reactionProgress, warning]);
+
+          useEffect(() => {
+            requestRef.current = requestAnimationFrame(animate);
+            return () => cancelAnimationFrame(requestRef.current);
+          }, [animate]);
+
+          const addDrop = (type) => {
+            if (isCapped) {
+              setWarning("請先打開蓋子才能滴加試劑 (Uncap first)");
+              return;
+            }
+            setWarning(null);
+            setDrops(prev => ({ ...prev, [type]: prev[type] + 1 }));
+          };
+
+          const handleReset = () => {
+            setDrops({ A: 0, B: 0, C: 0, D: 0 });
+            setIsCapped(false);
+            setShakeSpeed(0);
+            setReactionProgress(0);
+            setWarning(null);
+          };
+
+          const getLiquidColor = () => {
+            if (totalDrops === 0) return "transparent";
+            if (isCloudy) return "#3f2e18"; 
+            if (drops.A > 0 && drops.B === 0) return "#e2e8f0"; 
+            return "#f1f5f9"; 
+          };
+
+          return (
+            <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 bg-white rounded-xl shadow-lg mt-8 border-t-4 border-slate-600">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">4. 銀鏡反應 (Silver Mirror Reaction)</h2>
+              <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. 試劑滴加 (Add Reagents)</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {['A', 'B', 'C', 'D'].map(r => (
+                       <div key={r} className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-slate-500">{r}劑</label>
+                          <button onClick={() => addDrop(r)} className="bg-slate-200 hover:bg-slate-300 py-2 rounded font-mono transition">滴加 (+1)</button>
+                          <span className="text-xs text-slate-600 px-1">目前: {drops[r]}</span>
+                       </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. 實驗操作 (Actions)</h3>
+                    <div className="flex items-center justify-between mb-4 p-2 bg-white rounded border">
+                      <span className="text-sm font-bold text-slate-700">瓶蓋狀態:</span>
+                      <button onClick={() => setIsCapped(!isCapped)} className={`px-4 py-1 rounded-full text-sm font-bold transition-colors ${isCapped ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        {isCapped ? "已蓋上" : "已打開"}
+                      </button>
+                    </div>
+                    <div className="mb-4">
+                       <div className="flex justify-between mb-1">
+                         <label className="text-sm font-bold text-slate-700">搖晃速度:</label>
+                         <span className="text-xs font-mono">{shakeSpeed}%</span>
+                       </div>
+                       <input type="range" min="0" max="100" value={shakeSpeed} onChange={(e) => setShakeSpeed(Number(e.target.value))} className="w-full h-2 bg-slate-300 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+                    </div>
+                  </div>
+                  <button onClick={handleReset} className="w-full py-2 rounded font-semibold text-slate-600 bg-slate-200 hover:bg-slate-300">重置實驗</button>
+                </div>
+              </div>
+              {warning && <div className="w-full bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded animate-pulse">{warning}</div>}
+              <div className="relative w-full max-w-md aspect-[4/5] mx-auto flex items-center justify-center">
+                <svg viewBox="0 0 300 400" className="w-full h-full overflow-visible">
+                  <defs>
+                    <radialGradient id="silverGradient" cx="50%" cy="50%" r="50%" fx="40%" fy="40%">
+                      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                      <stop offset="40%" stopColor="#d1d5db" stopOpacity="0.9" />
+                      <stop offset="100%" stopColor="#64748b" stopOpacity="1" />
+                    </radialGradient>
+                    <filter id="brownCloud">
+                      <feTurbulence type="fractalNoise" baseFrequency="0.1" numOctaves="4" result="noise" />
+                      <feColorMatrix type="matrix" values="0 0 0 0 0.4  0 0 0 0 0.2  0 0 0 0 0.1  0 0 0 1 0" in="noise" result="coloredNoise" />
+                      <feComposite operator="in" in="coloredNoise" in2="SourceGraphic" />
+                    </filter>
+                    <linearGradient id="glassReflect" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="white" stopOpacity="0.1" />
+                      <stop offset="20%" stopColor="white" stopOpacity="0.3" />
+                      <stop offset="40%" stopColor="white" stopOpacity="0" />
+                      <stop offset="100%" stopColor="white" stopOpacity="0.2" />
+                    </linearGradient>
+                  </defs>
+                  <g transform={`translate(${shakeOffsetRef.current * 10}, 0)`}>
+                    <path d="M 100,100 L 100,330 Q 100,350 120,350 L 180,350 Q 200,350 200,330 L 200,100 Z" fill="none" stroke="#94a3b8" strokeWidth="3" />
+                    <rect x="95" y="90" width="110" height="10" rx="2" fill="#cbd5e1" stroke="#64748b" />
+                    <mask id="vialMask">
+                       <path d="M 102,100 L 102,330 Q 102,348 120,348 L 180,348 Q 198,348 198,330 L 198,100 Z" fill="white" />
+                    </mask>
+                    <g mask="url(#vialMask)">
+                       <rect x="100" y={350 - (liquidHeightPercent / 100) * 250} width="100" height="250" fill={getLiquidColor()} opacity={0.9} />
+                       {isCloudy && (
+                         <rect x="100" y={350 - (liquidHeightPercent / 100) * 250} width="100" height="250" filter="url(#brownCloud)" opacity={turbidity * 1.5} />
+                       )}
+                       <rect x="100" y={100} width="100" height="250" fill="url(#silverGradient)" opacity={reactionProgress / 100} />
+                    </g>
+                    <path d="M 100,100 L 100,330 Q 100,350 120,350 L 180,350 Q 200,350 200,330 L 200,100 Z" fill="url(#glassReflect)" pointerEvents="none" />
+                    {isCapped && (
+                      <g>
+                        <rect x="95" y="60" width="110" height="30" rx="4" fill="#334155" stroke="#1e293b" />
+                        <line x1="95" y1="70" x2="205" y2="70" stroke="#475569" strokeWidth="1" />
+                        <line x1="95" y1="80" x2="205" y2="80" stroke="#475569" strokeWidth="1" />
+                      </g>
+                    )}
+                  </g>
+                </svg>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 5. Titration Experiment Component (UPDATED with Math & Weak Acid) ---
+        const ACID_VOL_INITIAL = 25;
+        const ACID_CONC = 0.1;
+        const BASE_CONC = 0.1;
+        const KA_ACETIC = 1.8e-5;
+        const KB_AMMONIA = 1.8e-5;
+        const KW = 1e-14;
+
+        const INDICATORS = {
+          phenolphthalein: { name: '酚酞', rangeLow: 8.2, rangeHigh: 10.0, colorLow: '#ffffff', colorHigh: '#ec4899', label: '8.2 - 10.0' },
+          methylRed: { name: '甲基紅', rangeLow: 4.4, rangeHigh: 6.2, colorLow: '#ef4444', colorHigh: '#eab308', label: '4.4 - 6.2' },
+          bromothymolBlue: { name: '溴瑞香草芬藍', rangeLow: 6.0, rangeHigh: 7.6, colorLow: '#eab308', colorHigh: '#3b82f6', label: '6.0 - 7.6' }
+        };
+
+        const calculatePH = (vBase, acidType, baseType) => {
+          const vAcid = ACID_VOL_INITIAL;
+          const cAcid = ACID_CONC;
+          const cBase = BASE_CONC;
+          const molesA = vAcid * cAcid;
+          const molesB = vBase * cBase;
+          const totalVol = vAcid + vBase;
+
+          if (acidType === 'strong' && baseType === 'strong') {
+            if (molesB < molesA) return -Math.log10((molesA - molesB) / totalVol);
+            else if (Math.abs(molesB - molesA) < 1e-9) return 7.0;
+            else return 14.0 - (-Math.log10((molesB - molesA) / totalVol));
+          }
+          if (acidType === 'weak' && baseType === 'strong') {
+            if (vBase === 0) return -Math.log10(Math.sqrt(KA_ACETIC * cAcid));
+            if (molesB < molesA) {
+              const pKa = -Math.log10(KA_ACETIC);
+              return pKa + Math.log10(molesB / (molesA - molesB));
+            }
+            if (Math.abs(molesB - molesA) < 1e-9) {
+              const concSalt = molesA / totalVol;
+              const Kb = KW / KA_ACETIC;
+              return 14.0 - (-Math.log10(Math.sqrt(Kb * concSalt)));
+            }
+            if (molesB > molesA) return 14.0 - (-Math.log10((molesB - molesA) / totalVol));
+          }
+          if (acidType === 'strong' && baseType === 'weak') {
+            if (vBase === 0) return -Math.log10(cAcid);
+            if (molesB < molesA) return -Math.log10((molesA - molesB) / totalVol);
+            if (Math.abs(molesB - molesA) < 1e-9) {
+              const concSalt = molesA / totalVol;
+              const Ka = KW / KB_AMMONIA;
+              return -Math.log10(Math.sqrt(Ka * concSalt));
+            }
+            if (molesB > molesA) {
+              const pKaNH4 = 14.0 - (-Math.log10(KB_AMMONIA));
+              return pKaNH4 + Math.log10((molesB - molesA) / molesA);
+            }
+          }
+          if (acidType === 'weak' && baseType === 'weak') {
+             const pKa = -Math.log10(KA_ACETIC);
+             const pKaNH4 = 14.0 - (-Math.log10(KB_AMMONIA));
+             if (vBase === 0) return -Math.log10(Math.sqrt(KA_ACETIC * cAcid));
+             if (molesB < molesA) return pKa + Math.log10(molesB / (molesA - molesB));
+             if (Math.abs(molesB - molesA) < 1e-9) return (pKa + pKaNH4) / 2;
+             if (molesB > molesA) return pKaNH4 + Math.log10((molesB - molesA) / molesA);
+          }
+          return 7;
+        };
+
+        const getSolutionColor = (ph, type) => {
+          const ind = INDICATORS[type];
+          if (ph < ind.rangeLow) return '#f1f5f9';
+          if (type === 'phenolphthalein') return (ph > 10.0) ? '#ec4899' : (ph < 8.2 ? '#f8fafc' : '#fbcfe8');
+          if (type === 'methylRed') return (ph > 6.2) ? '#eab308' : (ph < 4.4 ? '#ef4444' : '#f97316');
+          if (type === 'bromothymolBlue') return (ph > 7.6) ? '#3b82f6' : (ph < 6.0 ? '#eab308' : '#22c55e');
+          return '#f1f5f9';
+        };
+
+        const getExplanation = (vol, acidType, baseType) => {
+          const vAcid = ACID_VOL_INITIAL;
+          const isEq = Math.abs(vol - vAcid) < 0.1;
+          const isPre = vol < vAcid;
+          const isPost = vol > vAcid;
+
+          if (acidType === 'strong' && baseType === 'strong') {
+            if (vol === 0) return { title: '初始', formula: '[H⁺] = Cₐ', desc: '強酸完全解離。' };
+            if (isPre) return { title: '酸過量', formula: '[H⁺] = (Nₐ - Nᵦ) / Vₜ', desc: '剩餘的酸決定 pH。' };
+            if (isEq) return { title: '當量點', formula: '[H⁺] = 10⁻⁷', desc: '完全中和呈中性。' };
+            if (isPost) return { title: '鹼過量', formula: '[OH⁻] = (Nᵦ - Nₐ) / Vₜ', desc: '剩餘的強鹼決定 pH。' };
+          }
+          if (acidType === 'weak' && baseType === 'strong') {
+            if (vol === 0) return { title: '弱酸解離', formula: '[H⁺] ≈ √(Kₐ × Cₐ)', desc: '弱酸部分解離。' };
+            if (isPre) return { title: '緩衝溶液', formula: '[H⁺] = Kₐ × (Cₐ / Cₛ)', desc: '弱酸與鹽形成緩衝。' };
+            if (isEq) return { title: '當量點', formula: '[OH⁻] ≈ √(Kₕ × Cₛ)', desc: '鹽類水解產生 OH⁻。' };
+            if (isPost) return { title: '強鹼過量', formula: '[OH⁻] ≈ (Nᵦ - Nₐ) / Vₜ', desc: '強鹼主導。' };
+          }
+          if (acidType === 'strong' && baseType === 'weak') {
+            if (vol === 0) return { title: '強酸初始', formula: '[H⁺] = Cₐ', desc: '強酸完全解離。' };
+            if (isPre) return { title: '強酸過量', formula: '[H⁺] = (Nₐ - Nᵦ) / Vₜ', desc: '強酸主導。' };
+            if (isEq) return { title: '當量點', formula: '[H⁺] ≈ √(Kₕ × Cₛ)', desc: '鹽類水解產生 H⁺。' };
+            if (isPost) return { title: '緩衝溶液', formula: '[OH⁻] = K₆ × (C₆ / Cₛ)', desc: '弱鹼與鹽形成緩衝。' };
+          }
+          return { title: '複雜系統', formula: '-', desc: '弱酸弱鹼。' };
+        };
+
+        const TitrationExperiment = () => {
+          const [state, setState] = useState({
+            addedBaseVol: 0,
+            indicator: 'phenolphthalein',
+            acidType: 'strong',
+            baseType: 'strong',
+          });
+
+          const currentPH = calculatePH(state.addedBaseVol, state.acidType, state.baseType);
+          const currentColor = getSolutionColor(currentPH, state.indicator);
+          const selectedInd = INDICATORS[state.indicator];
+          const explanation = getExplanation(state.addedBaseVol, state.acidType, state.baseType);
+
+          const graphPoints = useMemo(() => {
+            const points = [];
+            for (let v = 0; v <= 50; v += 0.5) {
+              if (v > 24 && v < 26) {
+                for (let fineV = v; fineV < v + 0.5; fineV += 0.1) points.push({ v: fineV, ph: calculatePH(fineV, state.acidType, state.baseType) });
+              } else points.push({ v, ph: calculatePH(v, state.acidType, state.baseType) });
+            }
+            return points;
+          }, [state.acidType, state.baseType]);
+
+          const mapX = (v) => 40 + (v / 50) * 240;
+          const mapY = (ph) => 180 - (ph / 14) * 160;
+          const polylinePoints = graphPoints.map(p => `${mapX(p.v)},${mapY(p.ph)}`).join(' ');
+          const indRangeYStart = mapY(selectedInd.rangeHigh);
+          const indRangeHeight = mapY(selectedInd.rangeLow) - indRangeYStart;
+
+          const addVolume = (amount) => setState(prev => ({ ...prev, addedBaseVol: Math.max(0, Math.min(prev.addedBaseVol + amount, 50)) }));
+          const reset = () => setState(prev => ({ ...prev, addedBaseVol: 0 }));
+
+          return (
+            <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 bg-white rounded-xl shadow-lg mt-8 border-t-4 border-purple-500">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">5. 酸鹼滴定 (Acid-Base Titration)</h2>
+              <div className="w-full bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">酸液</label>
+                    <select value={state.acidType} onChange={(e) => setState(prev => ({...prev, acidType: e.target.value, addedBaseVol: 0}))} className="w-full p-2 border rounded font-semibold">
+                      <option value="strong">強酸 (e.g., HCl)</option>
+                      <option value="weak">弱酸 (e.g., CH₃COOH)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">鹼液</label>
+                    <select value={state.baseType} onChange={(e) => setState(prev => ({...prev, baseType: e.target.value, addedBaseVol: 0}))} className="w-full p-2 border rounded font-semibold">
+                      <option value="strong">強鹼 (e.g., NaOH)</option>
+                      <option value="weak">弱鹼 (e.g., NH₃)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">指示劑</label>
+                    <select value={state.indicator} onChange={(e) => setState(prev => ({...prev, indicator: e.target.value}))} className="w-full p-2 border rounded font-semibold">
+                      <option value="phenolphthalein">酚酞</option>
+                      <option value="methylRed">甲基紅</option>
+                      <option value="bromothymolBlue">溴瑞香草芬藍</option>
+                    </select>
+                  </div>
+                </div>
+                <hr className="border-slate-200" />
+                <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                   <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <label className="block text-sm font-bold text-slate-500 mb-1">倒回 (Remove):</label>
+                        <div className="flex gap-2">
+                          <button onClick={() => addVolume(-5)} className="flex-1 py-2 bg-slate-200 rounded font-semibold text-sm">-5</button>
+                          <button onClick={() => addVolume(-1)} className="flex-1 py-2 bg-slate-200 rounded font-semibold text-sm">-1</button>
+                          <button onClick={() => addVolume(-0.1)} className="flex-1 py-2 bg-slate-200 rounded font-semibold text-sm">-0.1</button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="block text-sm font-bold text-blue-700 mb-1">滴加鹼液 (Add Base):</label>
+                        <div className="flex gap-2">
+                          <button onClick={() => addVolume(0.1)} className="flex-1 py-2 bg-blue-100 text-blue-800 rounded font-semibold text-sm">+0.1</button>
+                          <button onClick={() => addVolume(1)} className="flex-1 py-2 bg-blue-100 text-blue-800 rounded font-semibold text-sm">+1</button>
+                          <button onClick={() => addVolume(5)} className="flex-1 py-2 bg-blue-100 text-blue-800 rounded font-semibold text-sm">+5</button>
+                        </div>
+                      </div>
+                   </div>
+                   <button onClick={reset} className="w-full md:w-auto px-6 py-2 bg-red-100 text-red-700 rounded font-semibold text-sm mt-4 md:mt-0">重置</button>
+                </div>
+              </div>
+              <div className="flex flex-col md:flex-row w-full gap-8 items-start justify-center">
+                <div className="w-full md:w-1/2 aspect-[3/4] border border-slate-200 rounded-lg bg-white relative shadow-inner">
+                  <svg viewBox="0 0 300 400" className="w-full h-full">
+                    <rect x="140" y="20" width="10" height="380" fill="#475569" />
+                    <rect x="80" y="380" width="130" height="15" fill="#334155" />
+                    <rect x="110" y="100" width="40" height="5" fill="#334155" />
+                    <g transform="translate(100, 40)">
+                       <rect x="0" y="0" width="20" height="200" fill="none" stroke="#94a3b8" strokeWidth="2" />
+                       <rect x="2" y={state.addedBaseVol * 4} width="16" height={200 - state.addedBaseVol * 4} fill="#f1f5f9" opacity="0.8" />
+                       {Array.from({length: 11}).map((_, i) => <line key={i} x1="12" y1={i * 20} x2="20" y2={i * 20} stroke="#cbd5e1" strokeWidth="1" />)}
+                       <path d="M 10,200 L 10,220" stroke="#94a3b8" strokeWidth="2" />
+                       <circle cx="10" cy="210" r="4" fill="#64748b" />
+                    </g>
+                    <g transform="translate(60, 260)">
+                      <path d="M 40,0 L 60,0 L 60,40 L 90,100 L 10,100 L 40,40 Z" fill="none" stroke="#94a3b8" strokeWidth="2" />
+                      <path d={`M 15,90 L 85,90 L 90,100 L 10,100 Z`} fill={currentColor} stroke="none" opacity="0.8" />
+                      <text x="50" y="125" textAnchor="middle" fontSize="12" fill="#333" fontWeight="bold">0.1M {state.acidType === 'strong' ? 'HCl' : 'CH₃COOH'}</text>
+                    </g>
+                  </svg>
+                </div>
+                <div className="w-full md:w-1/2 flex flex-col items-center gap-4">
+                   <div className="relative w-full aspect-[4/3] border border-slate-300 bg-white rounded shadow-sm">
+                     <svg viewBox="0 0 300 200" className="w-full h-full">
+                        <rect x="40" y={indRangeYStart} width="240" height={indRangeHeight} fill={selectedInd.colorHigh} fillOpacity="0.15"/>
+                        <line x1="40" y1={indRangeYStart} x2="280" y2={indRangeYStart} stroke={selectedInd.colorHigh} strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" />
+                        <line x1="40" y1={indRangeYStart + indRangeHeight} x2="280" y2={indRangeYStart + indRangeHeight} stroke={selectedInd.colorLow} strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" />
+                        {[0, 2, 4, 6, 8, 10, 12, 14].map(ph => <line key={ph} x1="40" y1={mapY(ph)} x2="280" y2={mapY(ph)} stroke="#e2e8f0" strokeWidth="1" />)}
+                        {[0, 10, 20, 30, 40, 50].map(v => <line key={v} x1={mapX(v)} y1="20" x2={mapX(v)} y2="180" stroke="#e2e8f0" strokeWidth="1" />)}
+                        <line x1="40" y1="20" x2="40" y2="180" stroke="#64748b" strokeWidth="2" />
+                        <line x1="40" y1="180" x2="280" y2="180" stroke="#64748b" strokeWidth="2" />
+                        <text x="160" y="195" textAnchor="middle" fontSize="10" fill="#64748b">加入體積 (mL)</text>
+                        <text x="25" y="100" textAnchor="middle" fontSize="10" fill="#64748b" transform="rotate(-90, 25, 100)">pH Value</text>
+                        <polyline points={polylinePoints} fill="none" stroke="#475569" strokeWidth="2" />
+                        <circle cx={mapX(state.addedBaseVol)} cy={mapY(currentPH)} r="5" fill="#ef4444" stroke="white" strokeWidth="2" />
+                        <text x="35" y={mapY(7)} textAnchor="end" fontSize="9" alignmentBaseline="middle">7</text>
+                        <text x="35" y={mapY(14)} textAnchor="end" fontSize="9" alignmentBaseline="middle">14</text>
+                        <text x={mapX(25)} y="188" textAnchor="middle" fontSize="9">25</text>
+                        <text x={mapX(50)} y="188" textAnchor="middle" fontSize="9">50</text>
+                     </svg>
+                     <div className="absolute top-2 right-2 bg-white/90 p-1.5 border border-slate-200 rounded text-[9px] shadow-sm">
+                        <div className="font-bold text-slate-700 mb-1">變色範圍:</div>
+                        <div className="flex items-center gap-1">
+                           <div className="w-3 h-3 rounded bg-current opacity-30" style={{color: selectedInd.colorHigh}}></div>
+                           <span>{selectedInd.name} ({selectedInd.label})</span>
+                        </div>
+                     </div>
+                   </div>
+                   <div className="w-full flex flex-col gap-3">
+                     <div className="grid grid-cols-2 gap-3 text-center">
+                        <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                          <div className="text-[10px] text-blue-600 font-bold uppercase">加入體積</div>
+                          <div className="text-lg font-mono text-blue-900">{state.addedBaseVol.toFixed(1)} mL</div>
+                        </div>
+                        <div className="bg-purple-50 p-2 rounded border border-purple-100">
+                          <div className="text-[10px] text-purple-600 font-bold uppercase">目前 pH 值</div>
+                          <div className="text-lg font-mono text-purple-900">{currentPH.toFixed(2)}</div>
+                        </div>
+                     </div>
+                     <div className="w-full bg-slate-800 text-slate-100 rounded-lg p-4 shadow-md text-sm border-l-4 border-yellow-400">
+                        <div className="flex justify-between items-center mb-2">
+                           <h4 className="font-bold text-yellow-400">理論計算</h4>
+                           <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">{explanation.title}</span>
+                        </div>
+                        <div className="font-mono text-lg mb-2 text-center py-2 bg-slate-900 rounded border border-slate-700">
+                          {explanation.formula}
+                        </div>
+                        <p className="text-slate-300 text-xs leading-relaxed">{explanation.desc}</p>
+                     </div>
+                   </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // --- App Component ---
+        const App = () => {
+          return (
+            <div className="min-h-screen bg-slate-50 py-10 px-4">
+              <header className="text-center mb-10">
+                <h1 className="text-3xl md:text-4xl font-extrabold text-slate-800 mb-2">
+                  電化學互動模擬 (Electrochemical Simulations)
+                </h1>
+                <p className="text-slate-600 max-w-2xl mx-auto">
+                   高中化學虛擬實驗室：包含丹尼爾電池、取代反應、電鍍、銀鏡反應及酸鹼滴定。
+                </p>
+              </header>
+
+              <main className="space-y-16 pb-20">
+                <section><GalvanicCell /></section>
+                <hr className="border-t-2 border-slate-200 max-w-5xl mx-auto" />
+                <section><DisplacementReaction /></section>
+                <hr className="border-t-2 border-slate-200 max-w-5xl mx-auto" />
+                <section><ElectroplatingCell /></section>
+                <hr className="border-t-2 border-slate-200 max-w-5xl mx-auto" />
+                <section><SilverMirrorReaction /></section>
+                <hr className="border-t-2 border-slate-200 max-w-5xl mx-auto" />
+                <section><TitrationExperiment /></section>
+              </main>
+
+              <footer className="mt-12 text-center text-slate-400 text-sm pb-8">
+                © {new Date().getFullYear()} Chemistry Viz | Designed for Education
+              </footer>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

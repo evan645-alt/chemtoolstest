@@ -1,0 +1,5 @@
+{
+  "name": "Zinc-Copper Battery Simulator",
+  "description": "Interactive simulation of a Daniell Cell (Galvanic Cell) showing electron flow, ion migration, and redox reactions.",
+  "requestFramePermissions": []
+}
